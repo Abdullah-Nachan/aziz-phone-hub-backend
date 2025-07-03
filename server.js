@@ -7,6 +7,7 @@ const bodyParser = require('body-parser');
 const crypto = require('crypto');
 const Razorpay = require('razorpay');
 const cors = require('cors');
+const admin = require('firebase-admin');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -20,9 +21,28 @@ app.use(bodyParser.json());
 app.use('/razorpay-webhook', bodyParser.raw({ type: 'application/json' }));
 app.use(cors());
 
+// Firebase Admin SDK setup
+if (!admin.apps.length) {
+  let serviceAccount;
+  if (process.env.FIREBASE_SERVICE_ACCOUNT_BASE64) {
+    // Decode base64 to JSON
+    const decoded = Buffer.from(process.env.FIREBASE_SERVICE_ACCOUNT_BASE64, 'base64').toString('utf-8');
+    serviceAccount = JSON.parse(decoded);
+    admin.initializeApp({
+      credential: admin.credential.cert(serviceAccount),
+    });
+  } else {
+    // fallback for local dev
+    admin.initializeApp({
+      credential: admin.credential.applicationDefault(),
+    });
+  }
+}
+const firestore = admin.firestore();
+
 // === Manual Payment Verification Endpoint ===
-app.post('/verify-payment', (req, res) => {
-  const { razorpay_order_id, razorpay_payment_id, razorpay_signature, orderData } = req.body;
+app.post('/verify-payment', async (req, res) => {
+  const { razorpay_order_id, razorpay_payment_id, razorpay_signature, orderData, customerDetails } = req.body;
   if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
     return res.status(400).json({ success: false, message: 'Missing payment details.' });
   }
@@ -33,9 +53,21 @@ app.post('/verify-payment', (req, res) => {
     .digest('hex');
   if (generated_signature === razorpay_signature) {
     // Payment is verified
-    // TODO: Save order to database, send notification/email here
-    console.log('Payment verified for order:', orderData?.orderId || razorpay_order_id);
-    res.json({ success: true, message: 'Payment verified successfully.' });
+    try {
+      // Save order to Firestore
+      const orderDoc = {
+        'order-details': orderData,
+        'personal-details': customerDetails,
+        paymentId: razorpay_payment_id,
+        paymentStatus: 'completed',
+        updatedAt: new Date()
+      };
+      await firestore.collection('orders').doc(orderData.orderId).set(orderDoc, { merge: true });
+      res.json({ success: true, message: 'Payment verified and order saved.' });
+    } catch (err) {
+      console.error('Error saving order to Firestore:', err);
+      res.status(500).json({ success: false, message: 'Payment verified but failed to save order.', error: err.message });
+    }
   } else {
     res.json({ success: false, message: 'Payment verification failed.' });
   }
