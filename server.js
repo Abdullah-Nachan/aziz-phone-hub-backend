@@ -135,7 +135,8 @@ app.post('/create-order', async (req, res) => {
   try {
     const order = await razorpay.orders.create({
       amount: Math.round(amount * 100), // in paise
-      currency: currency || 'INR'
+      currency: currency || 'INR',
+      payment_capture: 1 // Ensure auto-capture to prevent auto-refund
     });
     res.json(order);
   } catch (err) {
