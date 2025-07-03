@@ -43,12 +43,13 @@ const firestore = admin.firestore();
 // === Manual Payment Verification Endpoint ===
 app.post('/verify-payment', async (req, res) => {
   console.log('verify-payment req.body:', req.body); // Log incoming request for debugging
-  const { razorpay_order_id, razorpay_payment_id, razorpay_signature, orderData, customerDetails } = req.body;
+  const { razorpay_order_id, razorpay_payment_id, razorpay_signature, orderData, customerDetails, orderId } = req.body;
+  const finalOrderId = orderData?.orderId || orderId;
   if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
     return res.status(400).json({ success: false, message: 'Missing payment details.' });
   }
-  if (!orderData || !orderData.orderId) {
-    return res.status(400).json({ success: false, message: 'Missing orderData or orderId.' });
+  if (!finalOrderId) {
+    return res.status(400).json({ success: false, message: 'Missing orderId.' });
   }
   // Generate signature
   const generated_signature = crypto
@@ -66,7 +67,7 @@ app.post('/verify-payment', async (req, res) => {
         paymentStatus: 'completed',
         updatedAt: new Date()
       };
-      await firestore.collection('orders').doc(orderData.orderId).set(orderDoc, { merge: true });
+      await firestore.collection('orders').doc(finalOrderId).set(orderDoc, { merge: true });
       res.json({ success: true, message: 'Payment verified and order saved.' });
     } catch (err) {
       console.error('Error saving order to Firestore:', err);
