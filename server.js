@@ -82,11 +82,12 @@ app.post('/verify-payment', async (req, res) => {
 });
 
 // === Razorpay Webhook Endpoint ===
-app.post('/razorpay-webhook', (req, res) => {
+app.post('/razorpay-webhook', express.raw({ type: 'application/json' }), async (req, res) => {
   const webhookSignature = req.headers['x-razorpay-signature'];
+  const secret = process.env.RAZORPAY_WEBHOOK_SECRET || RAZORPAY_WEBHOOK_SECRET;
   const rawBody = req.body; // Buffer
   const expectedSignature = crypto
-    .createHmac('sha256', process.env.RAZORPAY_WEBHOOK_SECRET || RAZORPAY_WEBHOOK_SECRET)
+    .createHmac('sha256', secret)
     .update(rawBody)
     .digest('hex');
   if (webhookSignature === expectedSignature) {
@@ -96,13 +97,21 @@ app.post('/razorpay-webhook', (req, res) => {
     console.log('Event payload:', JSON.stringify(event, null, 2));
     // Handle important events
     if (event.event === 'payment.captured') {
-      console.log('Payment captured for payment_id:', event.payload.payment.entity.id);
-      // TODO: Update order status in your database here
-    } else if (event.event === 'order.paid') {
-      console.log('Order paid for order_id:', event.payload.order.entity.id);
-      // TODO: Update order status in your database here
+      try {
+        const payment = event.payload.payment.entity;
+        const orderId = payment.order_id;
+        const paymentId = payment.id;
+        // Update order status in Firestore
+        await firestore.collection('orders').doc(orderId).set({
+          paymentStatus: 'paid',
+          paymentId: paymentId,
+          updatedAt: new Date()
+        }, { merge: true });
+        console.log('Order updated to paid for orderId:', orderId);
+      } catch (err) {
+        console.error('Error updating order from webhook:', err);
+      }
     }
-    // You can add more event handlers as needed
     res.status(200).json({ status: 'ok' });
   } else {
     console.warn('Invalid webhook signature');
