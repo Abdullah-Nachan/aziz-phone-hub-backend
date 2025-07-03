@@ -124,18 +124,9 @@ const razorpay = new Razorpay({
 app.post('/create-order', async (req, res) => {
   const { amount, currency } = req.body;
   try {
-    // Restrict EMI and Pay Later options
     const order = await razorpay.orders.create({
       amount: Math.round(amount * 100), // in paise
-      currency: currency || 'INR',
-      method: {
-        netbanking: true,
-        card: true,
-        upi: true,
-        wallet: true,
-        emi: false,
-        paylater: false
-      }
+      currency: currency || 'INR'
     });
     res.json(order);
   } catch (err) {
