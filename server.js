@@ -42,9 +42,13 @@ const firestore = admin.firestore();
 
 // === Manual Payment Verification Endpoint ===
 app.post('/verify-payment', async (req, res) => {
+  console.log('verify-payment req.body:', req.body); // Log incoming request for debugging
   const { razorpay_order_id, razorpay_payment_id, razorpay_signature, orderData, customerDetails } = req.body;
   if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
     return res.status(400).json({ success: false, message: 'Missing payment details.' });
+  }
+  if (!orderData || !orderData.orderId) {
+    return res.status(400).json({ success: false, message: 'Missing orderData or orderId.' });
   }
   // Generate signature
   const generated_signature = crypto
