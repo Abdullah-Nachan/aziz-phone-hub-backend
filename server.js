@@ -5,6 +5,7 @@
 const express = require('express');
 const bodyParser = require('body-parser');
 const crypto = require('crypto');
+const Razorpay = require('razorpay');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -40,20 +41,26 @@ app.post('/verify-payment', (req, res) => {
 
 // === Razorpay Webhook Endpoint ===
 app.post('/razorpay-webhook', (req, res) => {
-  // Razorpay sends the signature in headers
   const webhookSignature = req.headers['x-razorpay-signature'];
   const rawBody = req.body; // Buffer
-  // Verify webhook signature
   const expectedSignature = crypto
-    .createHmac('sha256', RAZORPAY_WEBHOOK_SECRET)
+    .createHmac('sha256', process.env.RAZORPAY_WEBHOOK_SECRET || RAZORPAY_WEBHOOK_SECRET)
     .update(rawBody)
     .digest('hex');
   if (webhookSignature === expectedSignature) {
-    // Webhook is verified
     const event = JSON.parse(rawBody.toString());
-    console.log('Webhook event:', event.event);
-    // TODO: Handle event types (payment.captured, order.paid, etc.)
-    // TODO: Send yourself a notification/email here if needed
+    console.log('Webhook event received:', event.event);
+    // Log the full event for debugging
+    console.log('Event payload:', JSON.stringify(event, null, 2));
+    // Handle important events
+    if (event.event === 'payment.captured') {
+      console.log('Payment captured for payment_id:', event.payload.payment.entity.id);
+      // TODO: Update order status in your database here
+    } else if (event.event === 'order.paid') {
+      console.log('Order paid for order_id:', event.payload.order.entity.id);
+      // TODO: Update order status in your database here
+    }
+    // You can add more event handlers as needed
     res.status(200).json({ status: 'ok' });
   } else {
     console.warn('Invalid webhook signature');
@@ -64,6 +71,25 @@ app.post('/razorpay-webhook', (req, res) => {
 // === Health Check ===
 app.get('/', (req, res) => {
   res.send('Razorpay verification backend is running.');
+});
+
+// Add Razorpay order creation endpoint for frontend
+const razorpay = new Razorpay({
+  key_id: process.env.RAZORPAY_KEY_ID || 'rzp_test_g1q57RmuF0n22s',
+  key_secret: process.env.RAZORPAY_KEY_SECRET || 'YOUR_TEST_SECRET',
+});
+
+app.post('/create-order', async (req, res) => {
+  const { amount, currency } = req.body;
+  try {
+    const order = await razorpay.orders.create({
+      amount: Math.round(amount * 100), // in paise
+      currency: currency || 'INR',
+    });
+    res.json(order);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 app.listen(PORT, () => {
