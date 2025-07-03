@@ -61,8 +61,9 @@ app.post('/verify-payment', async (req, res) => {
     try {
       // Save order to Firestore
       const orderDoc = {
-        'order-details': orderData,
-        'personal-details': customerDetails,
+        // Ensure 'order-details' is always an object (never undefined)
+        'order-details': orderData || {},
+        'personal-details': customerDetails || {},
         paymentId: razorpay_payment_id,
         paymentStatus: 'completed',
         updatedAt: new Date()
