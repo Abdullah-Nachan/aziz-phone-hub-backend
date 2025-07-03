@@ -6,6 +6,7 @@ const express = require('express');
 const bodyParser = require('body-parser');
 const crypto = require('crypto');
 const Razorpay = require('razorpay');
+const cors = require('cors');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -17,6 +18,7 @@ const RAZORPAY_WEBHOOK_SECRET = 'RAZORPAY_WEBHOOK_SECRET'; // <-- Replace with y
 app.use(bodyParser.json());
 // Parse raw body for webhook signature verification
 app.use('/razorpay-webhook', bodyParser.raw({ type: 'application/json' }));
+app.use(cors());
 
 // === Manual Payment Verification Endpoint ===
 app.post('/verify-payment', (req, res) => {
