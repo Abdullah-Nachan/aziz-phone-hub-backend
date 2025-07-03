@@ -11,7 +11,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // === CONFIGURATION ===
-const RAZORPAY_SECRET = 'RAZORPAY_LIVE_SECRET_KEY'; // <-- Replace with your Razorpay LIVE secret key
+const RAZORPAY_SECRET = process.env.RAZORPAY_KEY_SECRET || 'YOUR_TEST_SECRET'; // <-- Replace with your Razorpay LIVE secret key
 const RAZORPAY_WEBHOOK_SECRET = 'RAZORPAY_WEBHOOK_SECRET'; // <-- Replace with your Razorpay webhook secret
 
 // Parse JSON bodies
