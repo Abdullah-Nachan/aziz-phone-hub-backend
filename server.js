@@ -45,6 +45,8 @@ app.post('/verify-payment', async (req, res) => {
   console.log('verify-payment req.body:', req.body); // Log incoming request for debugging
   const { razorpay_order_id, razorpay_payment_id, razorpay_signature, orderData, customerDetails, orderId } = req.body;
   const finalOrderId = orderData?.orderId || orderId;
+  console.log('orderData:', orderData);
+  console.log('customerDetails:', customerDetails);
   if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
     return res.status(400).json({ success: false, message: 'Missing payment details.' });
   }
@@ -61,9 +63,9 @@ app.post('/verify-payment', async (req, res) => {
     try {
       // Save order to Firestore
       const orderDoc = {
-        // Ensure 'order-details' is always an object (never undefined)
-        'order-details': orderData || {},
-        'personal-details': customerDetails || {},
+        // Store full order and personal details if provided
+        'order-details': orderData ? { ...orderData } : {},
+        'personal-details': customerDetails ? { ...customerDetails } : {},
         paymentId: razorpay_payment_id,
         paymentStatus: 'completed',
         updatedAt: new Date()
