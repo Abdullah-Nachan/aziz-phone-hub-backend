@@ -95,19 +95,52 @@ app.post('/razorpay-webhook', express.raw({ type: 'application/json' }), async (
     console.log('Webhook event received:', event.event);
     // Log the full event for debugging
     console.log('Event payload:', JSON.stringify(event, null, 2));
+    
     // Handle important events
-    if (event.event === 'payment.captured') {
+    if (event.event === 'payment.captured' || event.event === 'payment.authorized') {
       try {
         const payment = event.payload.payment.entity;
-        const orderId = payment.order_id;
+        const orderId = payment.notes?.order_id || payment.order_id;
         const paymentId = payment.id;
+        const paymentType = payment.notes?.payment_type;
+        
+        if (!orderId) {
+          console.error('No order ID found in webhook payload');
+          res.status(200).json({ status: 'ok', message: 'No order ID found' });
+          return;
+        }
+        
+        // Get the order from Firestore
+        const orderRef = firestore.collection('orders').doc(orderId);
+        const orderDoc = await orderRef.get();
+        
+        if (!orderDoc.exists) {
+          console.error('Order not found in Firestore:', orderId);
+          res.status(200).json({ status: 'ok', message: 'Order not found' });
+          return;
+        }
+        
+        // Determine payment status based on event type
+        let paymentStatus = 'paid';
+        if (event.event === 'payment.authorized' && !event.event === 'payment.captured') {
+          paymentStatus = 'authorized';
+        }
+        
+        // For partial COD payments
+        if (paymentType === 'partial_cod_advance') {
+          paymentStatus = 'advance_paid';
+        }
+        
         // Update order status in Firestore
-        await firestore.collection('orders').doc(orderId).set({
-          paymentStatus: 'paid',
+        await orderRef.set({
+          paymentStatus: paymentStatus,
           paymentId: paymentId,
+          paymentVerified: true,
+          paymentVerifiedAt: new Date(),
           updatedAt: new Date()
         }, { merge: true });
-        console.log('Order updated to paid for orderId:', orderId);
+        
+        console.log(`Order ${orderId} updated to ${paymentStatus}`);
       } catch (err) {
         console.error('Error updating order from webhook:', err);
       }
