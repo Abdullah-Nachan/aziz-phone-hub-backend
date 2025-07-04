@@ -10,6 +10,7 @@ const cors = require('cors');
 const admin = require('firebase-admin');
 const app = express();
 const PORT = process.env.PORT || 3000;
+const nodemailer = require('nodemailer');
 
 // === CONFIGURATION ===
 const RAZORPAY_SECRET = process.env.RAZORPAY_KEY_SECRET || 'YOUR_TEST_SECRET'; // <-- Replace with your Razorpay LIVE secret key
@@ -88,6 +89,40 @@ app.post('/razorpay-webhook', express.raw({ type: 'application/json' }), async (
       }, { merge: true });
 
       console.log(`✅ Payment captured and order ${orderId} marked as ${paymentStatus}`);
+
+      // === Nodemailer: Send order confirmation email ===
+      try {
+        const orderData = orderDoc.data();
+        const customerEmail = orderData.customerDetails?.email || orderData.email;
+        const customerName = orderData.customerDetails?.firstName || 'Customer';
+        if (customerEmail) {
+          // Configure transporter (replace with your real credentials)
+          const transporter = nodemailer.createTransport({
+            service: 'gmail',
+            auth: {
+              user: 'nachanabdullah123@gmail.com', // Replace with your email
+              pass: 'rpjo egcf kzls kduf'     // Replace with your app password
+            }
+          });
+
+          // Compose email
+          const mailOptions = {
+            from: 'Aziz Phone Hub <nachanabdullah123@gmail.com>',
+            to: customerEmail,
+            subject: 'Order Confirmation - Aziz Phone Hub',
+            text: `Dear ${customerName},\n\nYour order has been confirmed!\nOrder ID: ${orderId}\nAmount: ₹${orderData.total || ''}\n\nThank you for shopping with us!\n\nAziz Phone Hub`,
+            html: `<p>Dear ${customerName},</p><p>Your order has been <b>confirmed</b>!</p><p><b>Order ID:</b> ${orderId}<br><b>Amount:</b> ₹${orderData.total || ''}</p><p>Thank you for shopping with us!<br>Aziz Phone Hub</p>`
+          };
+
+          await transporter.sendMail(mailOptions);
+          console.log(`✅ Order confirmation email sent to ${customerEmail}`);
+        } else {
+          console.warn('⚠️ No customer email found for order', orderId);
+        }
+      } catch (emailErr) {
+        console.error('❌ Failed to send order confirmation email:', emailErr);
+      }
+      // === End Nodemailer logic ===
     } catch (err) {
       console.error('❌ Webhook processing error:', err);
     }
