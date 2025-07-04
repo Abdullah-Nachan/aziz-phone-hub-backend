@@ -83,74 +83,61 @@ app.post('/verify-payment', async (req, res) => {
 
 // === Razorpay Webhook Endpoint ===
 app.post('/razorpay-webhook', express.raw({ type: 'application/json' }), async (req, res) => {
-  const webhookSignature = req.headers['x-razorpay-signature'];
-  const secret = process.env.RAZORPAY_WEBHOOK_SECRET || RAZORPAY_WEBHOOK_SECRET;
-  const rawBody = req.body; // Buffer
+  const crypto = require('crypto');
+  const secret = 'razorpay_webhook_secret'; // same as dashboard webhook secret
+  const signature = req.headers['x-razorpay-signature'];
+  const rawBody = req.body;
+
   const expectedSignature = crypto
     .createHmac('sha256', secret)
     .update(rawBody)
     .digest('hex');
-  if (webhookSignature === expectedSignature) {
+
+  if (signature === expectedSignature) {
     const event = JSON.parse(rawBody.toString());
-    console.log('Webhook event received:', event.event);
-    // Log the full event for debugging
-    console.log('Event payload:', JSON.stringify(event, null, 2));
-    
-    // Handle important events
-    if (event.event === 'payment.captured' || event.event === 'payment.authorized') {
-      try {
-        const payment = event.payload.payment.entity;
-        const orderId = payment.notes?.order_id || payment.order_id;
-        const paymentId = payment.id;
-        const paymentType = payment.notes?.payment_type;
-        
-        if (!orderId) {
-          console.error('No order ID found in webhook payload');
-          res.status(200).json({ status: 'ok', message: 'No order ID found' });
-          return;
-        }
-        
-        // Get the order from Firestore
-        const orderRef = firestore.collection('orders').doc(orderId);
-        const orderDoc = await orderRef.get();
-        
-        if (!orderDoc.exists) {
-          console.error('Order not found in Firestore:', orderId);
-          res.status(200).json({ status: 'ok', message: 'Order not found' });
-          return;
-        }
-        
-        // Determine payment status based on event type
-        let paymentStatus = 'paid';
-        if (event.event === 'payment.authorized' && !event.event === 'payment.captured') {
-          paymentStatus = 'authorized';
-        }
-        
-        // For partial COD payments
-        if (paymentType === 'partial_cod_advance') {
-          paymentStatus = 'advance_paid';
-        }
-        
-        // Update order status in Firestore
-        await orderRef.set({
-          paymentStatus: paymentStatus,
-          paymentId: paymentId,
-          paymentVerified: true,
-          paymentVerifiedAt: new Date(),
-          updatedAt: new Date()
-        }, { merge: true });
-        
-        console.log(`Order ${orderId} updated to ${paymentStatus}`);
-      } catch (err) {
-        console.error('Error updating order from webhook:', err);
+
+    // ✅ Early response to Razorpay
+    res.status(200).send('Webhook received');
+
+    try {
+      const payment = event.payload.payment.entity;
+      const orderId = payment.notes?.order_id || payment.order_id;
+      const paymentId = payment.id;
+      const paymentType = payment.notes?.payment_type || 'default';
+
+      if (!orderId) {
+        console.warn('⚠️ Order ID missing in webhook payload');
+        return;
       }
+
+      const orderRef = firestore.collection('orders').doc(orderId);
+      const orderDoc = await orderRef.get();
+
+      if (!orderDoc.exists) {
+        console.warn('⚠️ Order not found in Firestore:', orderId);
+        return;
+      }
+
+      const paymentStatus = (paymentType === 'partial_cod_advance') ? 'advance_paid' : 'paid';
+
+      await orderRef.set({
+        paymentStatus: paymentStatus,
+        paymentId: paymentId,
+        paymentVerified: true,
+        paymentVerifiedAt: new Date(),
+        updatedAt: new Date()
+      }, { merge: true });
+
+      console.log(`✅ Payment captured and order ${orderId} marked as ${paymentStatus}`);
+    } catch (err) {
+      console.error('❌ Webhook processing error:', err);
     }
-    res.status(200).json({ status: 'ok' });
   } else {
-    console.warn('Invalid webhook signature');
-    res.status(400).json({ status: 'invalid signature' });
+    console.warn('❌ Invalid webhook signature');
+    res.status(400).send('Invalid signature');
   }
 });
+
 
 // === Health Check ===
 app.get('/', (req, res) => {
