@@ -136,25 +136,12 @@ app.post('/create-order', async (req, res) => {
     const order = await razorpay.orders.create({
       amount: Math.round(amount * 100), // in paise
       currency: currency || 'INR',
-      payment_capture: 1, // Auto-capture payments immediately
-      method: 'card,netbanking,upi,wallet', // Specify allowed payment methods
-      notes: {
-        description: 'Order payment',
-        type: 'partial_cod' // Mark as partial COD for reference
-      }
+      payment_capture: 1 // Auto-capture payments immediately
     });
-    
-    // Log the order creation for debugging
-    console.log('Created Razorpay order:', order.id, 'with capture:', order.payment_capture);
-    
     res.json(order);
   } catch (err) {
     console.error('Error creating Razorpay order:', err);
-    res.status(500).json({ 
-      error: err.message,
-      code: err.error?.code,
-      description: err.error?.description 
-    });
+    res.status(500).json({ error: err.message });
   }
 });
 
