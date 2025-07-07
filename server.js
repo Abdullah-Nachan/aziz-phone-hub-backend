@@ -159,6 +159,50 @@ app.post('/create-order', async (req, res) => {
   }
 });
 
+// === Firestore Listener for New Orders (Admin Notification) ===
+firestore.collection('orders').onSnapshot(snapshot => {
+  snapshot.docChanges().forEach(async change => {
+    if (change.type === 'added') {
+      const order = change.doc.data();
+      // Only notify if not already notified
+      if (!order.adminNotified) {
+        try {
+          const transporter = nodemailer.createTransport({
+            service: 'gmail',
+            auth: {
+              user: 'nachanabdullah123@gmail.com', // your email
+              pass: 'rpjo egcf kzls kduf' // your app password
+            }
+          });
+
+          const mailOptions = {
+            from: 'Aziz Phone Hub <nachanabdullah123@gmail.com>',
+            to: 'azizsphonehub@gmail.com',
+            subject: `New Order Received - ${change.doc.id}`,
+            text: `A new order has been placed.\n\nOrder ID: ${change.doc.id}\nCustomer: ${order.customerDetails?.firstName || ''} ${order.customerDetails?.lastName || ''}\nPhone: ${order.customerDetails?.phone || ''}\nAddress: ${order.customerDetails?.address || ''}\nTotal: ₹${order.total}\nPayment Method: ${order.paymentMethod || ''}\n\nCheck Firestore for full details.`,
+            html: `<h3>New Order Received</h3>
+                   <p><b>Order ID:</b> ${change.doc.id}</p>
+                   <p><b>Customer:</b> ${order.customerDetails?.firstName || ''} ${order.customerDetails?.lastName || ''}</p>
+                   <p><b>Phone:</b> ${order.customerDetails?.phone || ''}</p>
+                   <p><b>Address:</b> ${order.customerDetails?.address || ''}</p>
+                   <p><b>Total:</b> ₹${order.total}</p>
+                   <p><b>Payment Method:</b> ${order.paymentMethod || ''}</p>
+                   <p>Check Firestore for full details.</p>`
+          };
+
+          await transporter.sendMail(mailOptions);
+          console.log('Admin notified for new order:', change.doc.id);
+
+          // Mark as notified to avoid duplicate emails
+          await change.doc.ref.update({ adminNotified: true });
+        } catch (err) {
+          console.error('❌ Failed to send admin order email:', err);
+        }
+      }
+    }
+  });
+});
+
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
