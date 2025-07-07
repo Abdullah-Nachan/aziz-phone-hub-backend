@@ -167,6 +167,9 @@ firestore.collection('orders').onSnapshot(snapshot => {
       // Only notify if not already notified
       if (!order.adminNotified) {
         try {
+          // Debug log for order object
+          console.log('New order object for email:', JSON.stringify(order, null, 2));
+
           const transporter = nodemailer.createTransport({
             service: 'gmail',
             auth: {
@@ -186,19 +189,26 @@ firestore.collection('orders').onSnapshot(snapshot => {
             ? new Date(orderDetails.createdAt).toLocaleString()
             : (order.updatedAt ? order.updatedAt : new Date().toLocaleString());
 
-          const items = Array.isArray(order.items) ? order.items : [];
+          // Items logic: ensure array and not empty
+          let items = Array.isArray(order.items) ? order.items : [];
+          let itemsHtml = 'No items listed.';
+          let itemsText = 'No items listed.';
+          if (items.length > 0) {
+            itemsHtml = `<ul>` + items.map(item =>
+              `<li>${item.name || ''} (x${item.quantity || 1}) - ₹${item.price || ''}</li>`
+            ).join('') + `</ul>`;
+            itemsText = items.map(item => `${item.name || ''} (x${item.quantity || 1}) - ₹${item.price || ''}`).join('\n');
+          }
 
-          const itemsHtml = items.length
-            ? `<ul>` + items.map(item =>
-                `<li>${item.name || ''} (x${item.quantity || 1}) - ₹${item.price || ''}</li>`
-              ).join('') + `</ul>`
-            : 'No items listed.';
+          // Total and payment method fallback
+          const total = (typeof order.total !== 'undefined' && order.total !== null) ? order.total : 'N/A';
+          const paymentMethod = order.paymentMethod || 'N/A';
 
           const mailOptions = {
             from: 'Aziz Phone Hub <nachanabdullah123@gmail.com>',
             to: 'azizsphonehub@gmail.com',
             subject: `New Order Received - ${change.doc.id}`,
-            text: `A new order has been placed.\n\nOrder ID: ${change.doc.id}\nOrder Date: ${orderDate}\n\nCustomer Name: ${customer.firstName || ''} ${customer.lastName || ''}\nPhone: ${customer.phone || ''}\nEmail: ${customer.email || ''}\nAddress: ${address.address || ''}, ${address.address2 || ''}, ${address.city || ''}, ${address.state || ''}, ${address.zip || ''}, ${address.country || ''}\n\nItems:\n${items.map(item => `${item.name || ''} (x${item.quantity || 1}) - ₹${item.price || ''}`).join('\n')}\n\nTotal: ₹${order.total}\nPayment Method: ${order.paymentMethod || ''}\n\nCheck Firestore for full details.`,
+            text: `A new order has been placed.\n\nOrder ID: ${change.doc.id}\nOrder Date: ${orderDate}\n\nCustomer Name: ${customer.firstName || ''} ${customer.lastName || ''}\nPhone: ${customer.phone || ''}\nEmail: ${customer.email || ''}\nAddress: ${address.address || ''}, ${address.address2 || ''}, ${address.city || ''}, ${address.state || ''}, ${address.zip || ''}, ${address.country || ''}\n\nItems:\n${itemsText}\n\nTotal: ₹${total}\nPayment Method: ${paymentMethod}\n\nCheck Firestore for full details.`,
             html: `<h3>New Order Received</h3>
               <p><b>Order ID:</b> ${change.doc.id}</p>
               <p><b>Order Date:</b> ${orderDate}</p>
@@ -212,8 +222,8 @@ firestore.collection('orders').onSnapshot(snapshot => {
               <h4>Order Items</h4>
               ${itemsHtml}
               <p>
-                <b>Total:</b> ₹${order.total}<br>
-                <b>Payment Method:</b> ${order.paymentMethod || ''}<br>
+                <b>Total:</b> ₹${total}<br>
+                <b>Payment Method:</b> ${paymentMethod}<br>
               </p>
               <p>Check Firestore for full details.</p>`
           };
