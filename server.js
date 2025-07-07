@@ -175,13 +175,17 @@ firestore.collection('orders').onSnapshot(snapshot => {
             }
           });
 
-          // Prepare detailed order info
-          const orderDate = order.createdAt
-            ? new Date(order.createdAt).toLocaleString()
-            : new Date().toLocaleString();
+          // Prefer order-details.customerDetails, else personal-details
+          const orderDetails = order['order-details'] || {};
+          const personalDetails = order['personal-details'] || {};
+          const customer = orderDetails.customerDetails || personalDetails || {};
+          const address = customer || {};
 
-          const customer = order.customerDetails || {};
-          const address = customer.address || {};
+          // Prefer order-details.createdAt, else updatedAt, else now
+          const orderDate = orderDetails.createdAt
+            ? new Date(orderDetails.createdAt).toLocaleString()
+            : (order.updatedAt ? order.updatedAt : new Date().toLocaleString());
+
           const items = Array.isArray(order.items) ? order.items : [];
 
           const itemsHtml = items.length
@@ -194,7 +198,7 @@ firestore.collection('orders').onSnapshot(snapshot => {
             from: 'Aziz Phone Hub <nachanabdullah123@gmail.com>',
             to: 'azizsphonehub@gmail.com',
             subject: `New Order Received - ${change.doc.id}`,
-            text: `A new order has been placed.\n\nOrder ID: ${change.doc.id}\nOrder Date: ${orderDate}\n\nCustomer Name: ${customer.firstName || ''} ${customer.lastName || ''}\nPhone: ${customer.phone || ''}\nEmail: ${customer.email || ''}\nAddress: ${address.line1 || ''}, ${address.line2 || ''}, ${address.city || ''}, ${address.state || ''}, ${address.pincode || ''}\n\nItems:\n${items.map(item => `${item.name || ''} (x${item.quantity || 1}) - ₹${item.price || ''}`).join('\n')}\n\nTotal: ₹${order.total}\nPayment Method: ${order.paymentMethod || ''}\n\nCheck Firestore for full details.`,
+            text: `A new order has been placed.\n\nOrder ID: ${change.doc.id}\nOrder Date: ${orderDate}\n\nCustomer Name: ${customer.firstName || ''} ${customer.lastName || ''}\nPhone: ${customer.phone || ''}\nEmail: ${customer.email || ''}\nAddress: ${address.address || ''}, ${address.address2 || ''}, ${address.city || ''}, ${address.state || ''}, ${address.zip || ''}, ${address.country || ''}\n\nItems:\n${items.map(item => `${item.name || ''} (x${item.quantity || 1}) - ₹${item.price || ''}`).join('\n')}\n\nTotal: ₹${order.total}\nPayment Method: ${order.paymentMethod || ''}\n\nCheck Firestore for full details.`,
             html: `<h3>New Order Received</h3>
               <p><b>Order ID:</b> ${change.doc.id}</p>
               <p><b>Order Date:</b> ${orderDate}</p>
@@ -203,7 +207,7 @@ firestore.collection('orders').onSnapshot(snapshot => {
                 <b>Name:</b> ${customer.firstName || ''} ${customer.lastName || ''}<br>
                 <b>Phone:</b> ${customer.phone || ''}<br>
                 <b>Email:</b> ${customer.email || ''}<br>
-                <b>Address:</b> ${address.line1 || ''}, ${address.line2 || ''}, ${address.city || ''}, ${address.state || ''}, ${address.pincode || ''}<br>
+                <b>Address:</b> ${address.address || ''}, ${address.address2 || ''}, ${address.city || ''}, ${address.state || ''}, ${address.zip || ''}, ${address.country || ''}<br>
               </p>
               <h4>Order Items</h4>
               ${itemsHtml}
