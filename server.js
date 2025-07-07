@@ -175,19 +175,43 @@ firestore.collection('orders').onSnapshot(snapshot => {
             }
           });
 
+          // Prepare detailed order info
+          const orderDate = order.createdAt
+            ? new Date(order.createdAt).toLocaleString()
+            : new Date().toLocaleString();
+
+          const customer = order.customerDetails || {};
+          const address = customer.address || {};
+          const items = Array.isArray(order.items) ? order.items : [];
+
+          const itemsHtml = items.length
+            ? `<ul>` + items.map(item =>
+                `<li>${item.name || ''} (x${item.quantity || 1}) - ₹${item.price || ''}</li>`
+              ).join('') + `</ul>`
+            : 'No items listed.';
+
           const mailOptions = {
             from: 'Aziz Phone Hub <nachanabdullah123@gmail.com>',
             to: 'azizsphonehub@gmail.com',
             subject: `New Order Received - ${change.doc.id}`,
-            text: `A new order has been placed.\n\nOrder ID: ${change.doc.id}\nCustomer: ${order.customerDetails?.firstName || ''} ${order.customerDetails?.lastName || ''}\nPhone: ${order.customerDetails?.phone || ''}\nAddress: ${order.customerDetails?.address || ''}\nTotal: ₹${order.total}\nPayment Method: ${order.paymentMethod || ''}\n\nCheck Firestore for full details.`,
+            text: `A new order has been placed.\n\nOrder ID: ${change.doc.id}\nOrder Date: ${orderDate}\n\nCustomer Name: ${customer.firstName || ''} ${customer.lastName || ''}\nPhone: ${customer.phone || ''}\nEmail: ${customer.email || ''}\nAddress: ${address.line1 || ''}, ${address.line2 || ''}, ${address.city || ''}, ${address.state || ''}, ${address.pincode || ''}\n\nItems:\n${items.map(item => `${item.name || ''} (x${item.quantity || 1}) - ₹${item.price || ''}`).join('\n')}\n\nTotal: ₹${order.total}\nPayment Method: ${order.paymentMethod || ''}\n\nCheck Firestore for full details.`,
             html: `<h3>New Order Received</h3>
-                   <p><b>Order ID:</b> ${change.doc.id}</p>
-                   <p><b>Customer:</b> ${order.customerDetails?.firstName || ''} ${order.customerDetails?.lastName || ''}</p>
-                   <p><b>Phone:</b> ${order.customerDetails?.phone || ''}</p>
-                   <p><b>Address:</b> ${order.customerDetails?.address || ''}</p>
-                   <p><b>Total:</b> ₹${order.total}</p>
-                   <p><b>Payment Method:</b> ${order.paymentMethod || ''}</p>
-                   <p>Check Firestore for full details.</p>`
+              <p><b>Order ID:</b> ${change.doc.id}</p>
+              <p><b>Order Date:</b> ${orderDate}</p>
+              <h4>Customer Details</h4>
+              <p>
+                <b>Name:</b> ${customer.firstName || ''} ${customer.lastName || ''}<br>
+                <b>Phone:</b> ${customer.phone || ''}<br>
+                <b>Email:</b> ${customer.email || ''}<br>
+                <b>Address:</b> ${address.line1 || ''}, ${address.line2 || ''}, ${address.city || ''}, ${address.state || ''}, ${address.pincode || ''}<br>
+              </p>
+              <h4>Order Items</h4>
+              ${itemsHtml}
+              <p>
+                <b>Total:</b> ₹${order.total}<br>
+                <b>Payment Method:</b> ${order.paymentMethod || ''}<br>
+              </p>
+              <p>Check Firestore for full details.</p>`
           };
 
           await transporter.sendMail(mailOptions);
